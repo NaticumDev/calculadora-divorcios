@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CLIENT
+}
+
+enum DivorceType {
+  VOLUNTARIO
+  CONTENCIOSO
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         Role          @default(CLIENT)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  calculations Calculation[]
+}
+
+model Calculation {
+  id                      String      @id @default(cuid())
+  userId                  String?
+  user                    User?       @relation(fields: [userId], references: [id])
+  divorceType             DivorceType
+  marriageDurationYears   Int
+  numberOfChildren        Int         @default(0)
+  childrenAges            String      @default("[]") // JSON array of Int[], stored as string for SQLite
+  obligorMonthlyIncome    Float
+  beneficiaryMonthlyIncome Float      @default(0)
+  childSupportPercentage  Float
+  childSupportMonthly     Float
+  childSupportDetails     String?     // JSON
+  compensatoryEnabled     Boolean     @default(false)
+  compensatoryMonthly     Float       @default(0)
+  compensatoryDurationYears Int       @default(0)
+  compensatoryFactors     String?     // JSON
+  housingCosts            String?     // JSON
+  housingCostsTotal       Float       @default(0)
+  legalFeesTotal          Float       @default(0)
+  monthlyTotal            Float
+  annualTotal             Float
+  oneTimeCosts            Float
+  projections             String?     // JSON
+  notes                   String?
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model LawyerConfig {
+  id                        String   @id @default("default")
+  firmName                  String   @default("")
+  lawyerName                String   @default("")
+  phone                     String   @default("")
+  email                     String   @default("")
+  address                   String   @default("")
+  logoUrl                   String?
+  voluntaryDivorceFee       Float    @default(15000)
+  contestedDivorceFee       Float    @default(35000)
+  additionalFees            String?  // JSON
+  defaultChildSupportPct1Child  Float @default(15)
+  defaultChildSupportPct2Child  Float @default(20)
+  defaultChildSupportPct3Plus   Float @default(30)
+  defaultRentEstimate       Float    @default(6000)
+  defaultDepositMonths      Int      @default(2)
+  defaultMovingCost         Float    @default(3000)
+  defaultFurnitureCost      Float    @default(15000)
+  defaultUtilitiesSetup     Float    @default(3000)
+  currentUMA                Float    @default(113.14)
+  currentMinimumWage        Float    @default(278.80)
+  updatedAt                 DateTime @updatedAt
+}
