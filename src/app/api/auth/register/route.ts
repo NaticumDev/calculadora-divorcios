@@ -70,8 +70,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("Registration error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Ocurrio un error al crear la cuenta. Intente de nuevo." },
+      { error: `Error al crear la cuenta: ${message}` },
       { status: 500 }
     );
   }
