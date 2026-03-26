@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 
 const publicRoutes = ["/", "/login", "/register", "/calculadora", "/feedback"];
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow auth API routes
-  if (pathname.startsWith("/api/auth")) {
+  // Allow auth API routes and other API routes
+  if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }
 
@@ -17,22 +16,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
-  const isLoggedIn = !!token;
-  const isAdmin = token?.role === "ADMIN";
+  // Check for session cookie (Auth.js v5 uses authjs.session-token)
+  const sessionToken =
+    req.cookies.get("authjs.session-token")?.value ||
+    req.cookies.get("__Secure-authjs.session-token")?.value ||
+    req.cookies.get("next-auth.session-token")?.value ||
+    req.cookies.get("__Secure-next-auth.session-token")?.value;
 
-  // Protect /admin/* routes - require ADMIN role
-  if (pathname.startsWith("/admin")) {
-    if (!isLoggedIn || !isAdmin) {
-      const loginUrl = new URL("/login", req.nextUrl.origin);
-      loginUrl.searchParams.set("callbackUrl", pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-    return NextResponse.next();
-  }
+  const isLoggedIn = !!sessionToken;
 
-  // Protect /dashboard/* routes - require any authenticated user
-  if (pathname.startsWith("/dashboard")) {
+  // Protect /admin/* and /dashboard/* routes
+  if (pathname.startsWith("/admin") || pathname.startsWith("/dashboard")) {
     if (!isLoggedIn) {
       const loginUrl = new URL("/login", req.nextUrl.origin);
       loginUrl.searchParams.set("callbackUrl", pathname);
