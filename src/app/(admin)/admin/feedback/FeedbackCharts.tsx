@@ -55,7 +55,7 @@ export default function FeedbackCharts({
               <XAxis dataKey="rating" />
               <YAxis allowDecimals={false} />
               <Tooltip
-                formatter={(value: number) => [`${value} respuestas`, "Cantidad"]}
+                formatter={(value) => [`${value} respuestas`, "Cantidad"]}
                 labelFormatter={(label) => `Calificación: ${label}`}
               />
               <Bar dataKey="count" fill={BAR_COLOR} radius={[4, 4, 0, 0]} />
@@ -76,7 +76,7 @@ export default function FeedbackCharts({
               <XAxis dataKey="rating" />
               <YAxis allowDecimals={false} />
               <Tooltip
-                formatter={(value: number) => [`${value} respuestas`, "Cantidad"]}
+                formatter={(value) => [`${value} respuestas`, "Cantidad"]}
                 labelFormatter={(label) => `Calificación: ${label}`}
               />
               <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
@@ -113,7 +113,7 @@ export default function FeedbackCharts({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [`${value} respuestas`, "Cantidad"]}
+                formatter={(value) => [`${value} respuestas`, "Cantidad"]}
               />
               <Legend />
             </PieChart>
@@ -149,7 +149,7 @@ export default function FeedbackCharts({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [`${value} respuestas`, "Cantidad"]}
+                formatter={(value) => [`${value} respuestas`, "Cantidad"]}
               />
               <Legend />
             </PieChart>
