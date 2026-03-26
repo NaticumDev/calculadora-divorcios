@@ -140,6 +140,28 @@ export default function LandingPage() {
         </section>
       </main>
 
+      {/* Feedback CTA */}
+      <section className="border-t bg-primary/5 py-12">
+        <div className="mx-auto max-w-3xl px-4 text-center">
+          <h2 className="text-2xl font-bold">
+            ¿Eres abogado? Danos tu opinión
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Tu retroalimentación como profesional del derecho familiar nos ayuda
+            a mejorar esta herramienta. Toma menos de 2 minutos.
+          </p>
+          <Link
+            href="/feedback"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "lg" }),
+              "mt-6 text-base"
+            )}
+          >
+            Responder encuesta
+          </Link>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t bg-muted/30 py-8">
         <div className="mx-auto max-w-6xl px-4">

@@ -85,3 +85,17 @@ model LawyerConfig {
   currentMinimumWage        Float    @default(278.80)
   updatedAt                 DateTime @updatedAt
 }
+
+model FeedbackResponse {
+  id                 String   @id @default(cuid())
+  respondentName     String?
+  respondentEmail    String?
+  easeOfUse          Int      // 1-5
+  accuracyRating     Int      // 1-5
+  mostUsefulSection  String
+  wouldRecommend     String   // "Sí", "No", "Tal vez"
+  additionalComments String?
+  createdAt          DateTime @default(now())
+
+  @@index([createdAt])
+}

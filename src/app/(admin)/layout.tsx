@@ -11,6 +11,7 @@ import {
   Palette,
   ArrowLeft,
   LayoutDashboard,
+  MessageSquare,
   Menu,
   X,
 } from "lucide-react";
@@ -36,6 +37,11 @@ const adminNavItems = [
     href: "/admin/marca",
     label: "Marca",
     icon: Palette,
+  },
+  {
+    href: "/admin/feedback",
+    label: "Retroalimentación",
+    icon: MessageSquare,
   },
 ];
 
