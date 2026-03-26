@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
@@ -36,7 +37,7 @@ model Calculation {
   divorceType             DivorceType
   marriageDurationYears   Int
   numberOfChildren        Int         @default(0)
-  childrenAges            String      @default("[]") // JSON array of Int[], stored as string for SQLite
+  childrenAges            String      @default("[]") // JSON array
   obligorMonthlyIncome    Float
   beneficiaryMonthlyIncome Float      @default(0)
   childSupportPercentage  Float
