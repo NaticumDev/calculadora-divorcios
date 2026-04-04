@@ -83,6 +83,8 @@ model LawyerConfig {
   defaultUtilitiesSetup     Float    @default(3000)
   currentUMA                Float    @default(113.14)
   currentMinimumWage        Float    @default(278.80)
+  calculationCount          Int      @default(0)
+  calculationLimit          Int      @default(30)
   updatedAt                 DateTime @updatedAt
 }
 
