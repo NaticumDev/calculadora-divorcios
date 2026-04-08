@@ -1,19 +1,77 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCalculation } from "@/hooks/useCalculation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import {
+  Save,
+  FileDown,
+  Loader2,
+  CheckCircle,
+  LogIn,
+} from "lucide-react";
+import Link from "next/link";
 
-export default function Step8Summary() {
-  const { result, calculate, reset, prevStep } = useCalculation();
+export default function Step8Summary({
+  isAuthenticated = false,
+}: {
+  isAuthenticated?: boolean;
+}) {
+  const state = useCalculation();
+  const { result, calculate, reset, prevStep } = state;
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     calculate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleSave = async () => {
+    if (!result) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/calculations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          divorceType: state.divorceType,
+          marriageDurationYears: state.marriageDurationYears,
+          numberOfChildren: state.numberOfChildren,
+          childrenAges: JSON.stringify(state.childrenAges),
+          obligorMonthlyIncome: state.obligorMonthlyIncome,
+          beneficiaryMonthlyIncome: state.beneficiaryMonthlyIncome,
+          childSupportPercentage: result.childSupport.percentage,
+          childSupportMonthly: result.childSupport.monthlyTotal,
+          compensatoryEnabled: state.compensatory.enabled,
+          compensatoryMonthly: result.compensatory?.selectedMonthly || 0,
+          compensatoryDurationYears: result.compensatory?.durationYears || 0,
+          housingCostsTotal: result.housing.oneTimeTotal + result.housing.monthlyRecurring,
+          legalFeesTotal: result.legalFees.total,
+          monthlyTotal: result.monthlyTotal,
+          annualTotal: result.annualTotal,
+          oneTimeCosts: result.oneTimeCosts,
+          projections: JSON.stringify(result.projections),
+        }),
+      });
+      if (!res.ok) throw new Error("Error al guardar");
+      setSaved(true);
+    } catch {
+      setSaveError("Error al guardar el cálculo. Intenta de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    // Print the page as PDF (browser native)
+    window.print();
+  };
 
   if (!result) {
     return (
@@ -96,7 +154,8 @@ export default function Step8Summary() {
               {formatCurrency(housing.monthlyRecurring)}
             </p>
             <p className="text-xs text-muted-foreground">
-              Recurrente mensual (+ {formatCurrency(housing.oneTimeTotal)} únicos)
+              Recurrente mensual (+{" "}
+              {formatCurrency(housing.oneTimeTotal)} únicos)
             </p>
           </CardContent>
         </Card>
@@ -220,16 +279,56 @@ export default function Step8Summary() {
         <Button variant="outline" onClick={prevStep}>
           Anterior
         </Button>
-        <Button variant="outline" disabled>
-          Descargar PDF
-        </Button>
-        <Button variant="outline" disabled>
-          Guardar cálculo
-        </Button>
+
+        {isAuthenticated ? (
+          <>
+            <Button
+              variant="outline"
+              onClick={handleDownloadPDF}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Descargar PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleSave}
+              disabled={saving || saved}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : saved ? (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                  Guardado
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Guardar cálculo
+                </>
+              )}
+            </Button>
+          </>
+        ) : (
+          <Link href="/login">
+            <Button variant="outline">
+              <LogIn className="mr-2 h-4 w-4" />
+              Inicia sesión para guardar y descargar PDF
+            </Button>
+          </Link>
+        )}
+
         <Button variant="destructive" onClick={reset}>
           Nuevo cálculo
         </Button>
       </div>
+
+      {saveError && (
+        <p className="text-sm text-red-600">{saveError}</p>
+      )}
     </div>
   );
 }

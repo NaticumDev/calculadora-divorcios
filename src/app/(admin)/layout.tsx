@@ -11,6 +11,7 @@ import {
   Palette,
   ArrowLeft,
   LayoutDashboard,
+  FolderOpen,
   MessageSquare,
   Menu,
   X,
@@ -22,6 +23,11 @@ const adminNavItems = [
     href: "/admin",
     label: "Dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    href: "/admin/casos",
+    label: "Mis Casos",
+    icon: FolderOpen,
   },
   {
     href: "/admin/configuracion",

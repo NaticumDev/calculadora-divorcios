@@ -23,7 +23,11 @@ const STEP_LABELS = [
   "Resumen",
 ];
 
-export default function CalculatorWizard() {
+export default function CalculatorWizard({
+  isAuthenticated = false,
+}: {
+  isAuthenticated?: boolean;
+}) {
   const { currentStep, nextStep, prevStep, calculate } = useCalculation();
 
   const renderStep = () => {
@@ -43,7 +47,7 @@ export default function CalculatorWizard() {
       case 7:
         return <Step7LegalFees />;
       case 8:
-        return <Step8Summary />;
+        return <Step8Summary isAuthenticated={isAuthenticated} />;
       default:
         return null;
     }

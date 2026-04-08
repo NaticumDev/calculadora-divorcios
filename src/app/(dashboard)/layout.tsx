@@ -10,6 +10,7 @@ import {
   User,
   LayoutDashboard,
   ShieldCheck,
+  FolderOpen,
   LogOut,
   Menu,
   X,
@@ -107,19 +108,34 @@ export default function DashboardLayout({
             );
           })}
           {isAdmin && (
-            <Link
-              href="/admin"
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                pathname.startsWith("/admin")
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <ShieldCheck className="h-4 w-4" />
-              Admin
-            </Link>
+            <>
+              <Link
+                href="/admin/casos"
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/admin/casos")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <FolderOpen className="h-4 w-4" />
+                Mis Casos
+              </Link>
+              <Link
+                href="/admin"
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname === "/admin"
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Admin
+              </Link>
+            </>
           )}
         </nav>
 
