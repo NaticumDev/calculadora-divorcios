@@ -57,6 +57,7 @@ model Calculation {
   notes                   String?
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
+  cases                   Case[]
 
   @@index([userId])
   @@index([createdAt])
@@ -99,5 +100,279 @@ model FeedbackResponse {
   additionalComments String?
   createdAt          DateTime @default(now())
 
+  @@index([createdAt])
+}
+
+// ==========================================
+// MÓDULO DE ADMINISTRACIÓN DE CASOS
+// ==========================================
+
+enum CaseStage {
+  CONSULTA_INICIAL
+  CONTRATO_SERVICIOS
+  NEGOCIACION
+  DEMANDA
+  PROCESO_JUDICIAL
+  SENTENCIA
+  EJECUCION
+  ARCHIVADO
+}
+
+enum CaseStatus {
+  ACTIVO
+  PAUSADO
+  CONCLUIDO
+  ARCHIVADO
+}
+
+enum PropertyRegime {
+  SOCIEDAD_CONYUGAL
+  SEPARACION_BIENES
+}
+
+enum AssetType {
+  INMUEBLE
+  VEHICULO
+  CUENTA_BANCARIA
+  INVERSION
+  EMPRESA
+  DEUDA
+  OTRO
+}
+
+enum RiskLevel {
+  ALTO
+  MEDIO
+  BAJO
+}
+
+enum RiskCategory {
+  NEGOCIACION
+  PATRIMONIO
+  HIJOS
+  PROCESAL
+  VIOLENCIA
+  CORPORATIVO
+}
+
+enum PaymentType {
+  HONORARIO
+  GASTO
+}
+
+enum HearingStatus {
+  PROGRAMADA
+  REALIZADA
+  SUSPENDIDA
+  CANCELADA
+}
+
+model Case {
+  id               String        @id @default(cuid())
+  caseNumber       String        @unique // Número interno del despacho
+  courtFileNumber  String?       // Número de expediente judicial
+  divorceType      DivorceType
+  stage            CaseStage     @default(CONSULTA_INICIAL)
+  status           CaseStatus    @default(ACTIVO)
+  propertyRegime   PropertyRegime?
+  courtName        String?       // Juzgado asignado
+  opposingLawyer   String?       // Abogado de la contraparte
+  opposingLawyerPhone String?
+  opposingLawyerEmail String?
+  estimatedDurationMonths Int?   // Duración estimada en meses
+  startDate        DateTime      @default(now())
+  endDate          DateTime?     // Fecha de conclusión
+  totalAgreedFee   Float         @default(0) // Honorarios pactados
+  internalNotes    String?       // Notas internas generales
+  calculationId    String?       // Vinculación con cálculo de costos
+  calculation      Calculation?  @relation(fields: [calculationId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relaciones con partes
+  clientId         String?       @unique
+  client           CaseParty?    @relation("CaseClient", fields: [clientId], references: [id])
+  counterpartId    String?       @unique
+  counterpart      CaseParty?    @relation("CaseCounterpart", fields: [counterpartId], references: [id])
+  children         Child[]
+  assets           Asset[]
+  payments         Payment[]
+  hearings         Hearing[]
+  documents        CaseDocument[]
+  risks            Risk[]
+  tasks            CaseTask[]
+  notes            CaseNote[]
+  feeSchedule      FeeSchedule[]
+
+  @@index([status])
+  @@index([stage])
+  @@index([createdAt])
+}
+
+model CaseParty {
+  id            String   @id @default(cuid())
+  fullName      String
+  curp          String?
+  rfc           String?
+  address       String?
+  phone         String?
+  email         String?
+  occupation    String?
+  monthlyIncome Float?
+  birthDate     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  caseAsClient      Case? @relation("CaseClient")
+  caseAsCounterpart Case? @relation("CaseCounterpart")
+}
+
+model Child {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fullName      String
+  birthDate     DateTime?
+  age           Int
+  currentCustody String?  // Quién tiene la custodia actualmente
+  desiredCustody String?  // Custodia deseada
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([caseId])
+}
+
+model Asset {
+  id            String    @id @default(cuid())
+  caseId        String
+  case          Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type          AssetType
+  description   String    // Nombre o descripción del bien
+  ownerName     String?   // A nombre de quién está
+  estimatedValue Float?
+  // Campos para inmuebles
+  propertyAddress String?
+  deedNumber    String?   // Número de escritura
+  // Campos para empresas
+  companyName   String?
+  companyRfc    String?
+  ownershipPercentage Float? // Porcentaje de participación
+  roleInCompany String?  // Rol del cónyuge en la empresa
+  // Campos para deudas
+  debtBalance   Float?
+  creditorName  String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([caseId])
+  @@index([type])
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  caseId      String
+  case        Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type        PaymentType // HONORARIO o GASTO
+  amount      Float
+  concept     String
+  date        DateTime    @default(now())
+  receiptUrl  String?     // Comprobante
+  notes       String?
+  createdAt   DateTime    @default(now())
+
+  @@index([caseId])
+  @@index([date])
+}
+
+model FeeSchedule {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  stage       CaseStage
+  amount      Float
+  description String?
+  isPaid      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([caseId])
+}
+
+model Hearing {
+  id          String        @id @default(cuid())
+  caseId      String
+  case        Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  date        DateTime
+  time        String?       // Hora en texto "10:30"
+  type        String        // Tipo de audiencia
+  courtName   String?
+  status      HearingStatus @default(PROGRAMADA)
+  result      String?       // Resultado de la audiencia
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([caseId])
+  @@index([date])
+}
+
+model CaseDocument {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name        String
+  category    String   // "acta_matrimonio", "identificacion", "escritura", "acta_constitutiva", etc.
+  fileUrl     String   // URL del archivo en almacenamiento
+  fileSize    Int?     // Tamaño en bytes
+  mimeType    String?
+  notes       String?
+  uploadedAt  DateTime @default(now())
+
+  @@index([caseId])
+  @@index([category])
+}
+
+model Risk {
+  id               String       @id @default(cuid())
+  caseId           String
+  case             Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  category         RiskCategory
+  level            RiskLevel
+  title            String
+  description      String
+  mitigationStrategy String?    // Estrategia de mitigación
+  isActive         Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([caseId])
+}
+
+model CaseTask {
+  id          String    @id @default(cuid())
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  dueDate     DateTime?
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  priority    Int       @default(2) // 1=alta, 2=media, 3=baja
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([caseId])
+  @@index([isCompleted])
+  @@index([dueDate])
+}
+
+model CaseNote {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([caseId])
   @@index([createdAt])
 }
