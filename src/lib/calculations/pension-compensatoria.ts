@@ -47,14 +47,14 @@ export function calculateCompensatory(
         obligorMonthlyIncome
       : 0;
 
-  // Si no hay diferencial significativo, no hay pension compensatoria
-  if (incomeDifferential <= 0.1) {
+  // Si no hay diferencial, no hay pension compensatoria
+  if (incomeDifferential <= 0) {
     return {
       conservative: 0,
       moderate: 0,
       aggressive: 0,
       selectedMonthly: 0,
-      durationYears: 0,
+      durationYears: marriageDurationYears,
       totalEstimate: 0,
     };
   }

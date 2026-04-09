@@ -50,8 +50,8 @@ export default function Step5PensionCompensatoria() {
     setEstimateLevel,
   } = useCalculation();
 
-  const [customAmount, setCustomAmount] = useState<number | null>(null);
   const [useCustom, setUseCustom] = useState(false);
+  const [customAmount, setCustomAmount] = useState<string>("");
 
   const factors = {
     marriageDurationYears,
@@ -63,25 +63,28 @@ export default function Step5PensionCompensatoria() {
     householdContribution: compensatory.householdContribution,
   };
 
+  const customValue = useCustom && customAmount ? parseFloat(customAmount) : undefined;
   const result = compensatory.enabled
-    ? calculateCompensatory(
-        factors,
-        useCustom && customAmount ? customAmount : undefined
-      )
+    ? calculateCompensatory(factors, customValue && customValue > 0 ? customValue : undefined)
     : null;
 
   const handleCustomToggle = (enabled: boolean) => {
     setUseCustom(enabled);
     if (!enabled) {
-      setCustomAmount(null);
+      setCustomAmount("");
       setCompensatoryFactors({ customMonthly: undefined });
     }
   };
 
-  const handleCustomAmountChange = (value: number) => {
+  const handleCustomAmountChange = (value: string) => {
     setCustomAmount(value);
-    setCompensatoryFactors({ customMonthly: value });
+    const parsed = parseFloat(value) || 0;
+    setCompensatoryFactors({ customMonthly: parsed > 0 ? parsed : undefined });
   };
+
+  const incomeDiff = obligorMonthlyIncome > 0
+    ? ((obligorMonthlyIncome - beneficiaryMonthlyIncome) / obligorMonthlyIncome * 100).toFixed(0)
+    : "0";
 
   return (
     <div className="space-y-6">
@@ -113,6 +116,17 @@ export default function Step5PensionCompensatoria() {
 
       {compensatory.enabled && (
         <>
+          {/* Income differential info */}
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="font-medium">Datos base del cálculo</p>
+            <div className="mt-2 grid gap-1 sm:grid-cols-2">
+              <p>Ingreso obligado: <span className="font-semibold">{formatCurrency(obligorMonthlyIncome)}</span></p>
+              <p>Ingreso beneficiario: <span className="font-semibold">{formatCurrency(beneficiaryMonthlyIncome)}</span></p>
+              <p>Diferencial de ingresos: <span className="font-semibold">{incomeDiff}%</span></p>
+              <p>Duración del matrimonio: <span className="font-semibold">{marriageDurationYears} {marriageDurationYears === 1 ? "año" : "años"}</span></p>
+            </div>
+          </div>
+
           {/* Factors */}
           <Card>
             <CardHeader>
@@ -202,36 +216,53 @@ export default function Step5PensionCompensatoria() {
                 <CardTitle className="text-base">
                   Nivel de estimación
                 </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Seleccione el escenario que desea utilizar para el cálculo.
+                </p>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {ESTIMATE_LEVELS.map((level) => {
-                    const isSelected =
-                      compensatory.estimateLevel === level.key;
-                    const amount = result[level.key];
-                    return (
-                      <div
-                        key={level.key}
-                        className={`cursor-pointer rounded-lg border p-4 text-center transition-all ${
-                          isSelected
-                            ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                            : "hover:border-primary/40"
-                        }`}
-                        onClick={() => setEstimateLevel(level.key)}
-                      >
-                        <p className="text-xs text-muted-foreground">
-                          {level.label}
-                        </p>
-                        <p className="mt-1 text-lg font-bold">
-                          {formatCurrency(amount)}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                          {level.description}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                {result.conservative === 0 && result.moderate === 0 && result.aggressive === 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                    <p className="font-medium">Sin diferencial de ingresos</p>
+                    <p className="mt-1">
+                      El beneficiario tiene un ingreso igual o mayor al obligado.
+                      La pensión compensatoria requiere un desequilibrio económico
+                      para generar un monto. Puede usar un monto personalizado abajo.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {ESTIMATE_LEVELS.map((level) => {
+                      const isSelected =
+                        compensatory.estimateLevel === level.key;
+                      const amount = result[level.key];
+                      return (
+                        <div
+                          key={level.key}
+                          className={`cursor-pointer rounded-lg border-2 p-4 text-center transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/5 ring-1 ring-primary/20"
+                              : "border-muted hover:border-primary/40"
+                          }`}
+                          onClick={() => setEstimateLevel(level.key)}
+                        >
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {level.label}
+                          </p>
+                          <p className="mt-1 text-xl font-bold">
+                            {formatCurrency(amount)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            mensual
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {level.description}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -245,7 +276,7 @@ export default function Step5PensionCompensatoria() {
                     Monto personalizado
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Ingrese un monto mensual manual.
+                    Ingrese un monto mensual manual en lugar de usar la estimación.
                   </p>
                 </div>
                 <Switch
@@ -266,12 +297,9 @@ export default function Step5PensionCompensatoria() {
                       type="number"
                       min={0}
                       className="pl-7"
-                      value={customAmount ?? ""}
-                      onChange={(e) =>
-                        handleCustomAmountChange(
-                          parseFloat(e.target.value) || 0
-                        )
-                      }
+                      placeholder="Ingrese el monto mensual"
+                      value={customAmount}
+                      onChange={(e) => handleCustomAmountChange(e.target.value)}
                     />
                   </div>
                 </div>
@@ -281,8 +309,11 @@ export default function Step5PensionCompensatoria() {
 
           {/* Duration and summary */}
           {result && (
-            <Card>
-              <CardContent className="space-y-3 pt-6">
+            <Card className="border-primary/30 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="text-base">Resumen de pensión compensatoria</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">
                     Duración
@@ -296,10 +327,10 @@ export default function Step5PensionCompensatoria() {
                   <span className="text-sm text-muted-foreground">
                     Monto mensual
                   </span>
-                  <span className="text-lg font-bold">
+                  <span className="text-xl font-bold">
                     {formatCurrency(
-                      useCustom && customAmount
-                        ? customAmount
+                      useCustom && customValue && customValue > 0
+                        ? customValue
                         : result[compensatory.estimateLevel]
                     )}
                   </span>
@@ -308,8 +339,8 @@ export default function Step5PensionCompensatoria() {
                   <span className="text-sm font-medium">Total estimado</span>
                   <Badge variant="secondary" className="text-sm">
                     {formatCurrency(
-                      (useCustom && customAmount
-                        ? customAmount
+                      (useCustom && customValue && customValue > 0
+                        ? customValue
                         : result[compensatory.estimateLevel]) *
                         12 *
                         result.durationYears
