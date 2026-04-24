@@ -83,7 +83,10 @@ export default function CasosPage() {
         setFetchError("");
       } else {
         const data = await res.json().catch(() => ({}));
-        setFetchError(data.error || `Error ${res.status}`);
+        const msg = data.detail
+          ? `${data.error || "Error"}: ${data.detail}`
+          : data.error || `Error ${res.status}: ${res.statusText}`;
+        setFetchError(msg);
       }
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Error de red");
