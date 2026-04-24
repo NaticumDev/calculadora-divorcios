@@ -72,6 +72,7 @@ export default function CasosPage() {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterStage, setFilterStage] = useState<string>("ALL");
   const [showNewCase, setShowNewCase] = useState(false);
+  const [fetchError, setFetchError] = useState<string>("");
 
   const fetchCases = async () => {
     try {
@@ -79,9 +80,13 @@ export default function CasosPage() {
       if (res.ok) {
         const data = await res.json();
         setCases(data);
+        setFetchError("");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setFetchError(data.error || `Error ${res.status}`);
       }
-    } catch {
-      // silently fail
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : "Error de red");
     } finally {
       setLoading(false);
     }
@@ -171,6 +176,14 @@ export default function CasosPage() {
           ))}
         </select>
       </div>
+
+      {/* Fetch error */}
+      {fetchError && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-medium">No se pudieron cargar los casos</p>
+          <p className="mt-1">{fetchError}</p>
+        </div>
+      )}
 
       {/* Cases grid */}
       {filtered.length === 0 ? (

@@ -37,8 +37,11 @@ export default function NewCaseModal({ onClose }: NewCaseModalProps) {
         }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al crear el caso");
+        const data = await res.json().catch(() => ({}));
+        const msg = data.detail
+          ? `${data.error || "Error"}: ${data.detail}`
+          : data.error || `Error ${res.status}: ${res.statusText}`;
+        throw new Error(msg);
       }
       const data = await res.json();
       router.push(`/admin/casos/${data.id}`);
