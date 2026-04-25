@@ -19,6 +19,13 @@ export async function GET() {
         hearings: {
           select: { date: true, status: true },
         },
+        tasks: {
+          where: { isCompleted: false },
+          select: { id: true, dueDate: true, priority: true },
+        },
+        payments: {
+          select: { type: true, amount: true },
+        },
       },
     });
 

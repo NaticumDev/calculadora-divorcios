@@ -14,6 +14,7 @@ import {
   LogOut,
   Menu,
   X,
+  CalendarDays,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -109,6 +110,19 @@ export default function DashboardLayout({
           })}
           {isAdmin && (
             <>
+              <Link
+                href="/admin/agenda"
+                onClick={() => setSidebarOpen(false)}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/admin/agenda")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <CalendarDays className="h-4 w-4" />
+                Agenda
+              </Link>
               <Link
                 href="/admin/casos"
                 onClick={() => setSidebarOpen(false)}

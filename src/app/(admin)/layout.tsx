@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Menu,
   X,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,11 @@ const adminNavItems = [
     href: "/admin",
     label: "Dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    href: "/admin/agenda",
+    label: "Agenda",
+    icon: CalendarDays,
   },
   {
     href: "/admin/casos",
