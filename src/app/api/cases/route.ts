@@ -50,6 +50,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validar cliente: nombre obligatorio
+    if (!body.client || !body.client.fullName || !body.client.fullName.trim()) {
+      return NextResponse.json(
+        { error: 'El nombre del cliente es obligatorio' },
+        { status: 400 }
+      );
+    }
+
     // Auto-generate caseNumber as NAT-YYYY-NNN with retry on uniqueness conflict
     const year = new Date().getFullYear();
     const prefix = `NAT-${year}-`;
@@ -66,26 +74,49 @@ export async function POST(request: Request) {
       nextNumber = (isNaN(parsed) ? 0 : parsed) + 1;
     }
 
-    // Try up to 5 times in case of race condition on unique caseNumber
+    const clientData = {
+      fullName: body.client.fullName.trim(),
+      phone: body.client.phone?.trim() || null,
+      email: body.client.email?.trim() || null,
+      curp: body.client.curp?.trim() || null,
+      rfc: body.client.rfc?.trim() || null,
+      address: body.client.address?.trim() || null,
+      occupation: body.client.occupation?.trim() || null,
+      monthlyIncome:
+        body.client.monthlyIncome !== undefined &&
+        body.client.monthlyIncome !== null &&
+        body.client.monthlyIncome !== ''
+          ? Number(body.client.monthlyIncome)
+          : null,
+    };
+
+    // Crear cliente + caso en una transacción atómica con retry
     let newCase = null;
     let attempts = 0;
     let lastError: unknown = null;
     while (attempts < 5 && !newCase) {
       const caseNumber = `${prefix}${String(nextNumber + attempts).padStart(3, '0')}`;
       try {
-        newCase = await prisma.case.create({
-          data: {
-            caseNumber,
-            divorceType: body.divorceType,
-            propertyRegime: body.propertyRegime || null,
-            estimatedDurationMonths: body.estimatedDurationMonths ?? null,
-            internalNotes: body.internalNotes || null,
-            totalAgreedFee: typeof body.totalAgreedFee === 'number' ? body.totalAgreedFee : 0,
-          },
-          include: {
-            client: true,
-            counterpart: true,
-          },
+        newCase = await prisma.$transaction(async (tx) => {
+          const client = await tx.caseParty.create({ data: clientData });
+          return tx.case.create({
+            data: {
+              caseNumber,
+              divorceType: body.divorceType,
+              propertyRegime: body.propertyRegime || null,
+              estimatedDurationMonths: body.estimatedDurationMonths ?? null,
+              internalNotes: body.internalNotes || null,
+              totalAgreedFee:
+                typeof body.totalAgreedFee === 'number'
+                  ? body.totalAgreedFee
+                  : 0,
+              clientId: client.id,
+            },
+            include: {
+              client: true,
+              counterpart: true,
+            },
+          });
         });
       } catch (err: unknown) {
         lastError = err;

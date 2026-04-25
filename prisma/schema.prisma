@@ -71,8 +71,8 @@ model LawyerConfig {
   email                     String   @default("")
   address                   String   @default("")
   logoUrl                   String?
-  voluntaryDivorceFee       Float    @default(15000)
-  contestedDivorceFee       Float    @default(35000)
+  voluntaryDivorceFee       Float    @default(25000)
+  contestedDivorceFee       Float    @default(50000)
   additionalFees            String?  // JSON
   defaultChildSupportPct1Child  Float @default(15)
   defaultChildSupportPct2Child  Float @default(20)
