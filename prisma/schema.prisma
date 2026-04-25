@@ -115,7 +115,6 @@ enum CaseStage {
   PROCESO_JUDICIAL
   SENTENCIA
   EJECUCION
-  ARCHIVADO
 }
 
 enum CaseStatus {

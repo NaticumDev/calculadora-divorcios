@@ -25,28 +25,15 @@ import RiesgosTab from "@/components/cases/tabs/RiesgosTab";
 import TareasTab from "@/components/cases/tabs/TareasTab";
 import NotasTab from "@/components/cases/tabs/NotasTab";
 import DocumentosTab from "@/components/cases/tabs/DocumentosTab";
+import StageChangeDialog from "@/components/cases/StageChangeDialog";
+import {
+  STAGE_LABELS,
+  STAGE_ORDER,
+  STATUS_REQUIRING_CONFIRMATION,
+  type CaseStage,
+} from "@/lib/cases/stage-rules";
 
-const STAGE_LABELS: Record<string, string> = {
-  CONSULTA_INICIAL: "Consulta inicial",
-  CONTRATO_SERVICIOS: "Contrato de servicios",
-  NEGOCIACION: "Negociación",
-  DEMANDA: "Demanda",
-  PROCESO_JUDICIAL: "Proceso judicial",
-  SENTENCIA: "Sentencia",
-  EJECUCION: "Ejecución",
-  ARCHIVADO: "Archivado",
-};
-
-const STAGES = [
-  "CONSULTA_INICIAL",
-  "CONTRATO_SERVICIOS",
-  "NEGOCIACION",
-  "DEMANDA",
-  "PROCESO_JUDICIAL",
-  "SENTENCIA",
-  "EJECUCION",
-  "ARCHIVADO",
-];
+const STAGES = STAGE_ORDER;
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVO: "Activo",
@@ -70,7 +57,6 @@ const STAGE_STYLES: Record<string, string> = {
   PROCESO_JUDICIAL: "bg-red-100 text-red-800 border-red-200",
   SENTENCIA: "bg-purple-100 text-purple-800 border-purple-200",
   EJECUCION: "bg-teal-100 text-teal-800 border-teal-200",
-  ARCHIVADO: "bg-gray-100 text-gray-800 border-gray-200",
 };
 
 const STATUSES = ["ACTIVO", "PAUSADO", "CONCLUIDO", "ARCHIVADO"];
@@ -94,9 +80,10 @@ export default function CaseDetailPage() {
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [activeTab, setActiveTab] = useState("general");
-  const [updatingStage, setUpdatingStage] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [pendingStage, setPendingStage] = useState<CaseStage | null>(null);
 
   const fetchCase = useCallback(async () => {
     try {
@@ -115,33 +102,40 @@ export default function CaseDetailPage() {
     fetchCase();
   }, [fetchCase]);
 
-  const handleStageChange = async (newStage: string) => {
-    setUpdatingStage(true);
-    try {
-      await fetch(`/api/cases/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: newStage }),
-      });
-      fetchCase();
-    } catch {
-      // error silenciado
-    } finally {
-      setUpdatingStage(false);
-    }
+  const handleStageSelect = (newStage: string) => {
+    if (newStage === caseData.stage) return;
+    // Abrir diálogo con validaciones y plantillas
+    setPendingStage(newStage as CaseStage);
   };
 
   const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === caseData.status) return;
+
+    // Confirmación si el estado lo requiere
+    const confirmMessage = STATUS_REQUIRING_CONFIRMATION[newStatus];
+    if (confirmMessage && !confirm(confirmMessage)) {
+      return;
+    }
+
     setUpdatingStatus(true);
+    setActionError("");
     try {
-      await fetch(`/api/cases/${id}`, {
+      const res = await fetch(`/api/cases/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          data.detail || data.error || `Error ${res.status}`
+        );
+      }
       fetchCase();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Error al cambiar estado"
+      );
     } finally {
       setUpdatingStatus(false);
     }
@@ -197,7 +191,7 @@ export default function CaseDetailPage() {
             {STATUS_LABELS[caseData.status] || caseData.status}
           </Badge>
           <Badge className={STAGE_STYLES[caseData.stage] || ""}>
-            {STAGE_LABELS[caseData.stage] || caseData.stage}
+            {STAGE_LABELS[caseData.stage as CaseStage] || caseData.stage}
           </Badge>
         </div>
 
@@ -223,7 +217,7 @@ export default function CaseDetailPage() {
           </div>
           <p className="text-xs text-muted-foreground sm:hidden">
             Etapa {currentStageIndex + 1} de {STAGES.length}:{" "}
-            {STAGE_LABELS[caseData.stage]}
+            {STAGE_LABELS[caseData.stage as CaseStage]}
           </p>
         </div>
 
@@ -235,19 +229,15 @@ export default function CaseDetailPage() {
             </label>
             <select
               value={caseData.stage}
-              onChange={(e) => handleStageChange(e.target.value)}
-              disabled={updatingStage}
+              onChange={(e) => handleStageSelect(e.target.value)}
               className="rounded-md border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               {STAGES.map((stage) => (
                 <option key={stage} value={stage}>
-                  {STAGE_LABELS[stage]}
+                  {STAGE_LABELS[stage as CaseStage]}
                 </option>
               ))}
             </select>
-            {updatingStage && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -271,6 +261,12 @@ export default function CaseDetailPage() {
             )}
           </div>
         </div>
+
+        {actionError && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {actionError}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -352,6 +348,20 @@ export default function CaseDetailPage() {
           />
         )}
       </div>
+
+      {/* Diálogo de cambio de etapa */}
+      {pendingStage && (
+        <StageChangeDialog
+          caseId={id}
+          caseData={caseData}
+          currentStage={caseData.stage as CaseStage}
+          newStage={pendingStage}
+          onClose={() => setPendingStage(null)}
+          onConfirmed={() => {
+            fetchCase();
+          }}
+        />
+      )}
     </div>
   );
 }
