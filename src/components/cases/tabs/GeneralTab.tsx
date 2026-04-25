@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import EditCaseModal from "@/components/cases/EditCaseModal";
 
 interface GeneralTabProps {
   caseData: any;
@@ -604,13 +605,25 @@ function ChildrenSection({
 }
 
 export default function GeneralTab({ caseData, onRefresh }: GeneralTabProps) {
+  const [showEditModal, setShowEditModal] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Información del caso */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Información del caso</CardTitle>
-          <CardDescription>Datos generales del expediente</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0">
+          <div>
+            <CardTitle className="text-base">Información del caso</CardTitle>
+            <CardDescription>Datos generales del expediente</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowEditModal(true)}
+          >
+            <Edit2 className="mr-2 h-3.5 w-3.5" />
+            Editar caso
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -625,31 +638,86 @@ export default function GeneralTab({ caseData, onRefresh }: GeneralTabProps) {
               <span className="text-muted-foreground">Régimen patrimonial:</span>{" "}
               {caseData.propertyRegime
                 ? PROPERTY_REGIME_LABELS[caseData.propertyRegime]
-                : "Sin especificar"}
+                : <span className="italic text-muted-foreground">Por confirmar</span>}
             </div>
             <div>
               <span className="text-muted-foreground">Juzgado:</span>{" "}
-              {caseData.courtName || "Sin asignar"}
+              {caseData.courtName || <span className="italic text-muted-foreground">Sin asignar</span>}
             </div>
             <div>
               <span className="text-muted-foreground">Expediente judicial:</span>{" "}
-              {caseData.courtFileNumber || "Sin asignar"}
+              {caseData.courtFileNumber || <span className="italic text-muted-foreground">Sin asignar</span>}
             </div>
             <div>
-              <span className="text-muted-foreground">Abogado contrario:</span>{" "}
-              {caseData.opposingLawyer || "Sin especificar"}
+              <span className="text-muted-foreground">Honorarios pactados:</span>{" "}
+              <span className="font-medium">
+                {formatCurrency(caseData.totalAgreedFee || 0)}
+              </span>
             </div>
             <div>
               <span className="text-muted-foreground">Duración estimada:</span>{" "}
               {caseData.estimatedDurationMonths
                 ? `${caseData.estimatedDurationMonths} meses`
-                : "Sin especificar"}
+                : <span className="italic text-muted-foreground">Sin especificar</span>}
             </div>
             <div>
               <span className="text-muted-foreground">Fecha de inicio:</span>{" "}
-              {new Date(caseData.startDate).toLocaleDateString("es-MX")}
+              {caseData.startDate
+                ? new Date(caseData.startDate).toLocaleDateString("es-MX")
+                : "—"}
             </div>
+            {caseData.endDate && (
+              <div>
+                <span className="text-muted-foreground">Fecha de cierre:</span>{" "}
+                <span className="font-medium">
+                  {new Date(caseData.endDate).toLocaleDateString("es-MX")}
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* Abogado contrario */}
+          {(caseData.opposingLawyer ||
+            caseData.opposingLawyerPhone ||
+            caseData.opposingLawyerEmail) && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Abogado de la contraparte
+              </p>
+              <div className="grid gap-2 text-sm sm:grid-cols-3">
+                {caseData.opposingLawyer && (
+                  <div>
+                    <span className="text-muted-foreground">Nombre:</span>{" "}
+                    {caseData.opposingLawyer}
+                  </div>
+                )}
+                {caseData.opposingLawyerPhone && (
+                  <div>
+                    <span className="text-muted-foreground">Tel:</span>{" "}
+                    {caseData.opposingLawyerPhone}
+                  </div>
+                )}
+                {caseData.opposingLawyerEmail && (
+                  <div>
+                    <span className="text-muted-foreground">Email:</span>{" "}
+                    {caseData.opposingLawyerEmail}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notas internas */}
+          {caseData.internalNotes && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                Notas internas
+              </p>
+              <p className="text-sm whitespace-pre-wrap">
+                {caseData.internalNotes}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -679,6 +747,15 @@ export default function GeneralTab({ caseData, onRefresh }: GeneralTabProps) {
         children={caseData.children || []}
         onRefresh={onRefresh}
       />
+
+      {/* Modal de edición */}
+      {showEditModal && (
+        <EditCaseModal
+          caseData={caseData}
+          onClose={() => setShowEditModal(false)}
+          onSaved={onRefresh}
+        />
+      )}
     </div>
   );
 }
