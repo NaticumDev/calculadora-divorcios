@@ -22,22 +22,26 @@ import {
   X,
   Edit2,
   Save,
+  Pencil,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import EditCaseModal from "@/components/cases/EditCaseModal";
 
 interface HonorariosTabProps {
   caseId: string;
-  totalAgreedFee: number;
+  caseData: any;
   payments: any[];
   onRefresh: () => void;
 }
 
 export default function HonorariosTab({
   caseId,
-  totalAgreedFee,
+  caseData,
   payments,
   onRefresh,
 }: HonorariosTabProps) {
+  const totalAgreedFee = caseData?.totalAgreedFee || 0;
+  const [showEditCase, setShowEditCase] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -150,13 +154,30 @@ export default function HonorariosTab({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Total pactado</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Total pactado</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowEditCase(true)}
+                title="Editar honorarios pactados"
+                className="h-7 px-2"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
             </div>
             <p className="mt-1 text-2xl font-bold">
               {formatCurrency(totalAgreedFee)}
             </p>
+            <button
+              onClick={() => setShowEditCase(true)}
+              className="text-xs text-primary hover:underline mt-1"
+            >
+              Editar
+            </button>
           </CardContent>
         </Card>
         <Card>
@@ -375,6 +396,15 @@ export default function HonorariosTab({
           )}
         </CardContent>
       </Card>
+
+      {/* Modal para editar honorarios pactados (reutiliza EditCaseModal) */}
+      {showEditCase && caseData && (
+        <EditCaseModal
+          caseData={caseData}
+          onClose={() => setShowEditCase(false)}
+          onSaved={onRefresh}
+        />
+      )}
     </div>
   );
 }

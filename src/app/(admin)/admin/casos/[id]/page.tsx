@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
+  ArrowRight,
   Loader2,
   User,
   Briefcase,
@@ -223,9 +224,22 @@ export default function CaseDetailPage() {
 
         {/* Quick actions */}
         <div className="flex flex-wrap items-center gap-4">
+          {/* Botón "Avanzar a la siguiente etapa" — visible cuando hay siguiente */}
+          {currentStageIndex < STAGES.length - 1 && (
+            <Button
+              onClick={() =>
+                handleStageSelect(STAGES[currentStageIndex + 1] as string)
+              }
+            >
+              Avanzar a:{" "}
+              {STAGE_LABELS[STAGES[currentStageIndex + 1] as CaseStage]}
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          )}
+
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-muted-foreground">
-              Etapa:
+              o cambiar a:
             </label>
             <select
               value={caseData.stage}
@@ -240,7 +254,7 @@ export default function CaseDetailPage() {
             </select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <label className="text-sm font-medium text-muted-foreground">
               Estado:
             </label>
@@ -308,7 +322,7 @@ export default function CaseDetailPage() {
         {activeTab === "honorarios" && (
           <HonorariosTab
             caseId={id}
-            totalAgreedFee={caseData.totalAgreedFee || 0}
+            caseData={caseData}
             payments={caseData.payments || []}
             onRefresh={fetchCase}
           />
