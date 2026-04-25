@@ -19,6 +19,8 @@ import {
   Loader2,
   X,
   CalendarDays,
+  Edit2,
+  Save,
 } from "lucide-react";
 
 interface TareasTabProps {
@@ -39,20 +41,46 @@ const PRIORITY_LABELS: Record<number, string> = {
   3: "Baja",
 };
 
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  dueDate: "",
+  priority: 2,
+};
+
 export default function TareasTab({
   caseId,
   tasks,
   onRefresh,
 }: TareasTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    title: "",
-    dueDate: "",
-    priority: 2,
-  });
+  const [error, setError] = useState<string>("");
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  };
+
+  const startEdit = (task: any) => {
+    setForm({
+      title: task.title || "",
+      description: task.description || "",
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toISOString().split("T")[0]
+        : "",
+      priority: task.priority || 2,
+    });
+    setEditingId(task.id);
+    setShowForm(true);
+    setError("");
+  };
 
   const pendingTasks = tasks
     .filter((t) => !t.isCompleted)
@@ -67,23 +95,34 @@ export default function TareasTab({
     );
 
   const handleSave = async () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim()) {
+      setError("El título es obligatorio");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/tasks`, {
-        method: "POST",
+      const url = editingId
+        ? `/api/cases/${caseId}/tasks/${editingId}`
+        : `/api/cases/${caseId}/tasks`;
+      const res = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title,
+          description: form.description || null,
           dueDate: form.dueDate || null,
           priority: form.priority,
         }),
       });
-      setForm({ title: "", dueDate: "", priority: 2 });
-      setShowForm(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
+      resetForm();
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
@@ -91,33 +130,47 @@ export default function TareasTab({
 
   const handleToggle = async (task: any) => {
     setTogglingId(task.id);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/tasks/${task.id}`, {
+      const res = await fetch(`/api/cases/${caseId}/tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          title: task.title,
+          description: task.description,
+          dueDate: task.dueDate,
+          priority: task.priority,
           isCompleted: !task.isCompleted,
           completedAt: !task.isCompleted ? new Date().toISOString() : null,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al actualizar");
     } finally {
       setTogglingId(null);
     }
   };
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm("¿Eliminar esta tarea?")) return;
+  const handleDelete = async (taskId: string, title: string) => {
+    if (!confirm(`¿Eliminar la tarea "${title}"?`)) return;
     setDeletingId(taskId);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/tasks/${taskId}`, {
+      const res = await fetch(`/api/cases/${caseId}/tasks/${taskId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     } finally {
       setDeletingId(null);
     }
@@ -156,6 +209,11 @@ export default function TareasTab({
         >
           {task.title}
         </p>
+        {task.description && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {task.description}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2 mt-1">
           <Badge className={PRIORITY_BADGE[task.priority] || ""}>
             {PRIORITY_LABELS[task.priority] || "Media"}
@@ -176,19 +234,30 @@ export default function TareasTab({
         </div>
       </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => handleDelete(task.id)}
-        disabled={deletingId === task.id}
-        className="text-red-600 hover:text-red-700 shrink-0"
-      >
-        {deletingId === task.id ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Trash2 className="h-3.5 w-3.5" />
-        )}
-      </Button>
+      <div className="flex gap-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => startEdit(task)}
+          title="Editar"
+        >
+          <Edit2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleDelete(task.id, task.title)}
+          disabled={deletingId === task.id}
+          className="text-red-600 hover:text-red-700"
+          title="Eliminar"
+        >
+          {deletingId === task.id ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 
@@ -203,12 +272,10 @@ export default function TareasTab({
       ) : (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Nueva tarea</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowForm(false)}
-            >
+            <CardTitle className="text-base">
+              {editingId ? "Editar tarea" : "Nueva tarea"}
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={resetForm}>
               <X className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -223,7 +290,7 @@ export default function TareasTab({
                   }
                   placeholder="Descripción de la tarea"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSave();
+                    if (e.key === "Enter" && !e.shiftKey) handleSave();
                   }}
                 />
               </div>
@@ -239,13 +306,27 @@ export default function TareasTab({
               </div>
             </div>
 
+            <div className="space-y-1">
+              <Label className="text-xs">Descripción (opcional)</Label>
+              <textarea
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[60px]"
+                value={form.description}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, description: e.target.value }))
+                }
+                placeholder="Detalles adicionales de la tarea"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label className="text-xs">Prioridad</Label>
               <div className="flex gap-2">
                 {([1, 2, 3] as const).map((p) => (
                   <button
                     key={p}
-                    onClick={() => setForm((prev) => ({ ...prev, priority: p }))}
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, priority: p }))
+                    }
                     className={`flex-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all ${
                       form.priority === p
                         ? PRIORITY_BADGE[p]
@@ -258,16 +339,29 @@ export default function TareasTab({
               </div>
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Agregar
-            </Button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : editingId ? (
+                  <Save className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {editingId ? "Guardar cambios" : "Agregar"}
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
+      )}
+
+      {error && !showForm && (
+        <p className="text-sm text-red-600">{error}</p>
       )}
 
       {/* Tareas pendientes */}

@@ -8,7 +8,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -23,6 +22,8 @@ import {
   Trash2,
   Loader2,
   X,
+  Edit2,
+  Save,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -42,13 +43,21 @@ const ASSET_TYPES = [
   { value: "OTRO", label: "Otro", icon: Package },
 ] as const;
 
-const TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  ASSET_TYPES.map((t) => [t.value, t.label])
-);
-
-const TYPE_ICONS: Record<string, any> = Object.fromEntries(
-  ASSET_TYPES.map((t) => [t.value, t.icon])
-);
+const EMPTY_FORM = {
+  type: "INMUEBLE",
+  description: "",
+  ownerName: "",
+  estimatedValue: "",
+  propertyAddress: "",
+  deedNumber: "",
+  companyName: "",
+  companyRfc: "",
+  ownershipPercentage: "",
+  roleInCompany: "",
+  debtBalance: "",
+  creditorName: "",
+  notes: "",
+};
 
 export default function PatrimonioTab({
   caseId,
@@ -56,49 +65,57 @@ export default function PatrimonioTab({
   onRefresh,
 }: PatrimonioTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    type: "INMUEBLE",
-    description: "",
-    ownerName: "",
-    estimatedValue: "",
-    propertyAddress: "",
-    deedNumber: "",
-    companyName: "",
-    companyRfc: "",
-    ownershipPercentage: "",
-    roleInCompany: "",
-    debtBalance: "",
-    creditorName: "",
-    notes: "",
-  });
+  const [error, setError] = useState<string>("");
+  const [form, setForm] = useState(EMPTY_FORM);
 
   const resetForm = () => {
-    setForm({
-      type: "INMUEBLE",
-      description: "",
-      ownerName: "",
-      estimatedValue: "",
-      propertyAddress: "",
-      deedNumber: "",
-      companyName: "",
-      companyRfc: "",
-      ownershipPercentage: "",
-      roleInCompany: "",
-      debtBalance: "",
-      creditorName: "",
-      notes: "",
-    });
+    setForm(EMPTY_FORM);
+    setEditingId(null);
     setShowForm(false);
+    setError("");
+  };
+
+  const startEdit = (asset: any) => {
+    setForm({
+      type: asset.type || "INMUEBLE",
+      description: asset.description || "",
+      ownerName: asset.ownerName || "",
+      estimatedValue:
+        asset.estimatedValue != null ? String(asset.estimatedValue) : "",
+      propertyAddress: asset.propertyAddress || "",
+      deedNumber: asset.deedNumber || "",
+      companyName: asset.companyName || "",
+      companyRfc: asset.companyRfc || "",
+      ownershipPercentage:
+        asset.ownershipPercentage != null
+          ? String(asset.ownershipPercentage)
+          : "",
+      roleInCompany: asset.roleInCompany || "",
+      debtBalance: asset.debtBalance != null ? String(asset.debtBalance) : "",
+      creditorName: asset.creditorName || "",
+      notes: asset.notes || "",
+    });
+    setEditingId(asset.id);
+    setShowForm(true);
+    setError("");
   };
 
   const handleSave = async () => {
-    if (!form.description.trim()) return;
+    if (!form.description.trim()) {
+      setError("La descripción es obligatoria");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/assets`, {
-        method: "POST",
+      const url = editingId
+        ? `/api/cases/${caseId}/assets/${editingId}`
+        : `/api/cases/${caseId}/assets`;
+      const res = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: form.type,
@@ -120,25 +137,34 @@ export default function PatrimonioTab({
           notes: form.notes || null,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       resetForm();
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (assetId: string) => {
-    if (!confirm("¿Eliminar este bien/activo?")) return;
+  const handleDelete = async (assetId: string, description: string) => {
+    if (!confirm(`¿Eliminar "${description}"?`)) return;
     setDeleting(assetId);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/assets/${assetId}`, {
+      const res = await fetch(`/api/cases/${caseId}/assets/${assetId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     } finally {
       setDeleting(null);
     }
@@ -150,13 +176,17 @@ export default function PatrimonioTab({
     items: assets.filter((a) => a.type === t.value),
   })).filter((g) => g.items.length > 0);
 
-  const totalValue = assets.reduce(
-    (sum, a) => sum + (a.estimatedValue || 0),
-    0
-  );
+  // Activos: bienes excepto deudas (los que suman al patrimonio)
+  const totalAssets = assets
+    .filter((a) => a.type !== "DEUDA")
+    .reduce((sum, a) => sum + (a.estimatedValue || 0), 0);
   const totalDebt = assets
     .filter((a) => a.type === "DEUDA")
-    .reduce((sum, a) => sum + (a.debtBalance || 0), 0);
+    .reduce(
+      (sum, a) => sum + (a.debtBalance || a.estimatedValue || 0),
+      0
+    );
+  const netWorth = totalAssets - totalDebt;
 
   return (
     <div className="space-y-6">
@@ -164,21 +194,36 @@ export default function PatrimonioTab({
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total bienes</p>
-            <p className="text-2xl font-bold">{assets.length}</p>
+            <p className="text-sm text-muted-foreground">Activos</p>
+            <p className="text-2xl font-bold">{formatCurrency(totalAssets)}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {assets.filter((a) => a.type !== "DEUDA").length} bienes
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Valor estimado</p>
-            <p className="text-2xl font-bold">{formatCurrency(totalValue)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Total deudas</p>
+            <p className="text-sm text-muted-foreground">Deudas</p>
             <p className="text-2xl font-bold text-red-600">
               {formatCurrency(totalDebt)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {assets.filter((a) => a.type === "DEUDA").length} deudas
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Patrimonio neto</p>
+            <p
+              className={`text-2xl font-bold ${
+                netWorth >= 0 ? "" : "text-red-600"
+              }`}
+            >
+              {formatCurrency(netWorth)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Activos − Deudas
             </p>
           </CardContent>
         </Card>
@@ -192,11 +237,13 @@ export default function PatrimonioTab({
         </Button>
       )}
 
-      {/* Formulario */}
+      {/* Formulario (crear o editar) */}
       {showForm && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Nuevo bien o activo</CardTitle>
+            <CardTitle className="text-base">
+              {editingId ? "Editar bien o activo" : "Nuevo bien o activo"}
+            </CardTitle>
             <Button variant="ghost" size="sm" onClick={resetForm}>
               <X className="h-4 w-4" />
             </Button>
@@ -397,14 +444,23 @@ export default function PatrimonioTab({
               />
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Agregar
-            </Button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : editingId ? (
+                  <Save className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {editingId ? "Guardar cambios" : "Agregar"}
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -431,7 +487,7 @@ export default function PatrimonioTab({
                 <Card key={asset.id}>
                   <CardContent className="pt-5 space-y-2">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-sm">
                           {asset.description}
                         </p>
@@ -441,19 +497,32 @@ export default function PatrimonioTab({
                           </p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(asset.id)}
-                        disabled={deleting === asset.id}
-                        className="text-red-600 hover:text-red-700 -mt-1 -mr-2"
-                      >
-                        {deleting === asset.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                      <div className="flex gap-0.5 -mt-1 -mr-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEdit(asset)}
+                          title="Editar"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleDelete(asset.id, asset.description)
+                          }
+                          disabled={deleting === asset.id}
+                          className="text-red-600 hover:text-red-700"
+                          title="Eliminar"
+                        >
+                          {deleting === asset.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
                     </div>
 
                     {asset.estimatedValue != null && (
@@ -463,17 +532,24 @@ export default function PatrimonioTab({
                     )}
 
                     {/* Campos específicos */}
-                    {asset.type === "INMUEBLE" && asset.propertyAddress && (
-                      <p className="text-xs text-muted-foreground">
-                        {asset.propertyAddress}
-                      </p>
+                    {asset.type === "INMUEBLE" && (
+                      <div className="text-xs text-muted-foreground space-y-0.5">
+                        {asset.propertyAddress && (
+                          <p>{asset.propertyAddress}</p>
+                        )}
+                        {asset.deedNumber && (
+                          <p>Escritura: {asset.deedNumber}</p>
+                        )}
+                      </div>
                     )}
                     {asset.type === "EMPRESA" && (
                       <div className="text-xs text-muted-foreground space-y-0.5">
                         {asset.companyName && <p>{asset.companyName}</p>}
+                        {asset.companyRfc && <p>RFC: {asset.companyRfc}</p>}
                         {asset.ownershipPercentage != null && (
                           <p>Participación: {asset.ownershipPercentage}%</p>
                         )}
+                        {asset.roleInCompany && <p>Rol: {asset.roleInCompany}</p>}
                       </div>
                     )}
                     {asset.type === "DEUDA" && (

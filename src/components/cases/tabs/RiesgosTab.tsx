@@ -18,6 +18,9 @@ import {
   Loader2,
   X,
   AlertTriangle,
+  Edit2,
+  Save,
+  CheckCircle2,
 } from "lucide-react";
 
 interface RiesgosTabProps {
@@ -68,14 +71,18 @@ export default function RiesgosTab({
   onRefresh,
 }: RiesgosTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [error, setError] = useState<string>("");
   const [form, setForm] = useState({
     category: "NEGOCIACION" as string,
     level: "MEDIO" as string,
     title: "",
     description: "",
     mitigationStrategy: "",
+    isActive: true as boolean,
   });
 
   const resetForm = () => {
@@ -85,16 +92,40 @@ export default function RiesgosTab({
       title: "",
       description: "",
       mitigationStrategy: "",
+      isActive: true,
     });
+    setEditingId(null);
     setShowForm(false);
+    setError("");
+  };
+
+  const startEdit = (risk: any) => {
+    setForm({
+      category: risk.category || "NEGOCIACION",
+      level: risk.level || "MEDIO",
+      title: risk.title || "",
+      description: risk.description || "",
+      mitigationStrategy: risk.mitigationStrategy || "",
+      isActive: risk.isActive !== false,
+    });
+    setEditingId(risk.id);
+    setShowForm(true);
+    setError("");
   };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.description.trim()) return;
+    if (!form.title.trim() || !form.description.trim()) {
+      setError("Título y descripción son obligatorios");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/risks`, {
-        method: "POST",
+      const url = editingId
+        ? `/api/cases/${caseId}/risks/${editingId}`
+        : `/api/cases/${caseId}/risks`;
+      const res = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: form.category,
@@ -102,35 +133,75 @@ export default function RiesgosTab({
           title: form.title,
           description: form.description,
           mitigationStrategy: form.mitigationStrategy || null,
+          isActive: form.isActive,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       resetForm();
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (riskId: string) => {
-    if (!confirm("¿Eliminar este riesgo?")) return;
-    setDeleting(riskId);
+  const handleToggleActive = async (risk: any) => {
+    setTogglingId(risk.id);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/risks/${riskId}`, {
+      const res = await fetch(`/api/cases/${caseId}/risks/${risk.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: risk.category,
+          level: risk.level,
+          title: risk.title,
+          description: risk.description,
+          mitigationStrategy: risk.mitigationStrategy,
+          isActive: !risk.isActive,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al actualizar");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDelete = async (riskId: string, title: string) => {
+    if (!confirm(`¿Eliminar el riesgo "${title}"?`)) return;
+    setDeleting(riskId);
+    setError("");
+    try {
+      const res = await fetch(`/api/cases/${caseId}/risks/${riskId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     } finally {
       setDeleting(null);
     }
   };
 
-  const altos = risks.filter((r) => r.level === "ALTO");
-  const medios = risks.filter((r) => r.level === "MEDIO");
-  const bajos = risks.filter((r) => r.level === "BAJO");
+  // Solo contar riesgos activos en el resumen
+  const activeRisks = risks.filter((r) => r.isActive !== false);
+  const altos = activeRisks.filter((r) => r.level === "ALTO");
+  const medios = activeRisks.filter((r) => r.level === "MEDIO");
+  const bajos = activeRisks.filter((r) => r.level === "BAJO");
 
   return (
     <div className="space-y-6">
@@ -189,7 +260,9 @@ export default function RiesgosTab({
       {showForm && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Nuevo riesgo</CardTitle>
+            <CardTitle className="text-base">
+              {editingId ? "Editar riesgo" : "Nuevo riesgo"}
+            </CardTitle>
             <Button variant="ghost" size="sm" onClick={resetForm}>
               <X className="h-4 w-4" />
             </Button>
@@ -271,14 +344,40 @@ export default function RiesgosTab({
               />
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Agregar
-            </Button>
+            {editingId && (
+              <div className="flex items-center gap-2 rounded-md border p-3">
+                <input
+                  type="checkbox"
+                  id="risk-active"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, isActive: e.target.checked }))
+                  }
+                  className="h-4 w-4"
+                />
+                <Label htmlFor="risk-active" className="text-sm cursor-pointer">
+                  Riesgo activo (desmarca si ya fue mitigado o ya no aplica)
+                </Label>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : editingId ? (
+                  <Save className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {editingId ? "Guardar cambios" : "Agregar"}
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -292,55 +391,101 @@ export default function RiesgosTab({
         </Card>
       )}
 
+      {error && !showForm && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {risks.map((risk: any) => (
-          <Card
-            key={risk.id}
-            className={LEVEL_STYLES[risk.level] || ""}
-          >
-            <CardContent className="pt-5 space-y-3">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="font-medium text-sm">{risk.title}</p>
-                  <div className="flex gap-1.5">
-                    <Badge className={LEVEL_BADGE[risk.level] || ""}>
-                      {LEVEL_LABELS[risk.level] || risk.level}
-                    </Badge>
-                    <Badge variant="secondary">
-                      {CATEGORY_LABELS[risk.category] || risk.category}
-                    </Badge>
+        {risks.map((risk: any) => {
+          const inactive = risk.isActive === false;
+          return (
+            <Card
+              key={risk.id}
+              className={`${
+                inactive
+                  ? "border-gray-200 bg-gray-50 opacity-70"
+                  : LEVEL_STYLES[risk.level] || ""
+              }`}
+            >
+              <CardContent className="pt-5 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1 flex-1">
+                    <p className="font-medium text-sm">
+                      {risk.title}
+                      {inactive && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          (mitigado)
+                        </span>
+                      )}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge className={LEVEL_BADGE[risk.level] || ""}>
+                        {LEVEL_LABELS[risk.level] || risk.level}
+                      </Badge>
+                      <Badge variant="secondary">
+                        {CATEGORY_LABELS[risk.category] || risk.category}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-0.5 -mt-1 -mr-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleToggleActive(risk)}
+                      disabled={togglingId === risk.id}
+                      title={inactive ? "Reactivar" : "Marcar como mitigado"}
+                    >
+                      {togglingId === risk.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2
+                          className={`h-3.5 w-3.5 ${
+                            inactive ? "text-muted-foreground" : "text-green-600"
+                          }`}
+                        />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => startEdit(risk)}
+                      title="Editar"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(risk.id, risk.title)}
+                      disabled={deleting === risk.id}
+                      className="text-red-600 hover:text-red-700"
+                      title="Eliminar"
+                    >
+                      {deleting === risk.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(risk.id)}
-                  disabled={deleting === risk.id}
-                  className="text-red-600 hover:text-red-700 -mt-1 -mr-2"
-                >
-                  {deleting === risk.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                </Button>
-              </div>
 
-              <p className="text-sm text-muted-foreground">
-                {risk.description}
-              </p>
+                <p className="text-sm text-muted-foreground">
+                  {risk.description}
+                </p>
 
-              {risk.mitigationStrategy && (
-                <div className="rounded-md bg-white/60 p-2.5">
-                  <p className="text-xs font-medium text-muted-foreground mb-0.5">
-                    Mitigación
-                  </p>
-                  <p className="text-xs">{risk.mitigationStrategy}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+                {risk.mitigationStrategy && (
+                  <div className="rounded-md bg-white/60 p-2.5">
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">
+                      Mitigación
+                    </p>
+                    <p className="text-xs">{risk.mitigationStrategy}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

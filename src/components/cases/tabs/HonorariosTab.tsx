@@ -20,6 +20,8 @@ import {
   Trash2,
   Loader2,
   X,
+  Edit2,
+  Save,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -37,14 +39,42 @@ export default function HonorariosTab({
   onRefresh,
 }: HonorariosTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState<string>("");
   const [form, setForm] = useState({
     type: "HONORARIO" as "HONORARIO" | "GASTO",
     amount: "",
     concept: "",
     date: new Date().toISOString().split("T")[0],
   });
+
+  const resetForm = () => {
+    setForm({
+      type: "HONORARIO",
+      amount: "",
+      concept: "",
+      date: new Date().toISOString().split("T")[0],
+    });
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  };
+
+  const startEdit = (payment: any) => {
+    setForm({
+      type: payment.type,
+      amount: String(payment.amount ?? ""),
+      concept: payment.concept || "",
+      date: payment.date
+        ? new Date(payment.date).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+    });
+    setEditingId(payment.id);
+    setShowForm(true);
+    setError("");
+  };
 
   const totalHonorarios = payments
     .filter((p) => p.type === "HONORARIO")
@@ -57,11 +87,18 @@ export default function HonorariosTab({
   const saldoPendiente = totalAgreedFee - totalHonorarios;
 
   const handleSave = async () => {
-    if (!form.concept.trim() || !form.amount) return;
+    if (!form.concept.trim() || !form.amount) {
+      setError("Concepto y monto son obligatorios");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/payments`, {
-        method: "POST",
+      const url = editingId
+        ? `/api/cases/${caseId}/payments/${editingId}`
+        : `/api/cases/${caseId}/payments`;
+      const res = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: form.type,
@@ -70,31 +107,34 @@ export default function HonorariosTab({
           date: form.date,
         }),
       });
-      setForm({
-        type: "HONORARIO",
-        amount: "",
-        concept: "",
-        date: new Date().toISOString().split("T")[0],
-      });
-      setShowForm(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
+      resetForm();
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (paymentId: string) => {
-    if (!confirm("¿Eliminar este pago?")) return;
+  const handleDelete = async (paymentId: string, concept: string) => {
+    if (!confirm(`¿Eliminar el pago "${concept}"?`)) return;
     setDeleting(paymentId);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/payments/${paymentId}`, {
+      const res = await fetch(`/api/cases/${caseId}/payments/${paymentId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     } finally {
       setDeleting(null);
     }
@@ -172,8 +212,10 @@ export default function HonorariosTab({
       {showForm && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Nuevo pago</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+            <CardTitle className="text-base">
+              {editingId ? "Editar pago" : "Nuevo pago"}
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={resetForm}>
               <X className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -233,14 +275,23 @@ export default function HonorariosTab({
               </div>
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Registrar
-            </Button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : editingId ? (
+                  <Save className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {editingId ? "Guardar cambios" : "Registrar"}
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -264,7 +315,7 @@ export default function HonorariosTab({
                     <th className="pb-2 font-medium">Concepto</th>
                     <th className="pb-2 font-medium">Tipo</th>
                     <th className="pb-2 font-medium text-right">Monto</th>
-                    <th className="pb-2 font-medium w-10"></th>
+                    <th className="pb-2 font-medium w-20"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -291,19 +342,30 @@ export default function HonorariosTab({
                         {formatCurrency(payment.amount)}
                       </td>
                       <td className="py-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(payment.id)}
-                          disabled={deleting === payment.id}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          {deleting === payment.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
+                        <div className="flex justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => startEdit(payment)}
+                            title="Editar"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(payment.id, payment.concept)}
+                            disabled={deleting === payment.id}
+                            className="text-red-600 hover:text-red-700"
+                            title="Eliminar"
+                          >
+                            {deleting === payment.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

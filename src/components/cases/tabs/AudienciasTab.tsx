@@ -20,6 +20,7 @@ import {
   Loader2,
   X,
   Save,
+  Edit2,
 } from "lucide-react";
 
 interface AudienciasTabProps {
@@ -44,93 +45,203 @@ const STATUS_LABELS: Record<string, string> = {
 
 const HEARING_STATUSES = ["PROGRAMADA", "REALIZADA", "SUSPENDIDA", "CANCELADA"];
 
+const EMPTY_FORM = {
+  date: "",
+  time: "",
+  type: "",
+  courtName: "",
+  status: "PROGRAMADA",
+  result: "",
+  notes: "",
+};
+
 export default function AudienciasTab({
   caseId,
   hearings,
   onRefresh,
 }: AudienciasTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ status: "", result: "" });
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    date: "",
-    time: "",
-    type: "",
-    courtName: "",
-  });
+  const [error, setError] = useState<string>("");
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
+    setError("");
+  };
+
+  const startEdit = (hearing: any) => {
+    setForm({
+      date: hearing.date
+        ? new Date(hearing.date).toISOString().split("T")[0]
+        : "",
+      time: hearing.time || "",
+      type: hearing.type || "",
+      courtName: hearing.courtName || "",
+      status: hearing.status || "PROGRAMADA",
+      result: hearing.result || "",
+      notes: hearing.notes || "",
+    });
+    setEditingId(hearing.id);
+    setShowForm(true);
+    setError("");
+  };
 
   const handleSave = async () => {
-    if (!form.date || !form.type.trim()) return;
+    if (!form.date || !form.type.trim()) {
+      setError("Fecha y tipo de audiencia son obligatorios");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/hearings`, {
-        method: "POST",
+      const url = editingId
+        ? `/api/cases/${caseId}/hearings/${editingId}`
+        : `/api/cases/${caseId}/hearings`;
+      const res = await fetch(url, {
+        method: editingId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           date: form.date,
           time: form.time || null,
           type: form.type,
           courtName: form.courtName || null,
+          status: form.status,
+          result: form.result || null,
+          notes: form.notes || null,
         }),
       });
-      setForm({ date: "", time: "", type: "", courtName: "" });
-      setShowForm(false);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
+      resetForm();
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (hearingId: string) => {
-    if (!confirm("¿Eliminar esta audiencia?")) return;
+  const handleDelete = async (hearingId: string, type: string) => {
+    if (!confirm(`¿Eliminar la audiencia de "${type}"?`)) return;
     setDeleting(hearingId);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/hearings/${hearingId}`, {
+      const res = await fetch(`/api/cases/${caseId}/hearings/${hearingId}`, {
         method: "DELETE",
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
     } finally {
       setDeleting(null);
     }
   };
 
-  const startEdit = (hearing: any) => {
-    setEditingId(hearing.id);
-    setEditForm({
-      status: hearing.status,
-      result: hearing.result || "",
-    });
-  };
+  // Separar próximas vs pasadas
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
 
-  const handleUpdate = async (hearingId: string) => {
-    setUpdatingId(hearingId);
-    try {
-      await fetch(`/api/cases/${caseId}/hearings/${hearingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: editForm.status,
-          result: editForm.result || null,
-        }),
-      });
-      setEditingId(null);
-      onRefresh();
-    } catch {
-      // error silenciado
-    } finally {
-      setUpdatingId(null);
-    }
-  };
+  const upcoming = hearings
+    .filter(
+      (h) =>
+        h.status === "PROGRAMADA" && new Date(h.date) >= now
+    )
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const sortedHearings = [...hearings].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  const past = hearings
+    .filter(
+      (h) =>
+        h.status !== "PROGRAMADA" || new Date(h.date) < now
+    )
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const renderHearing = (hearing: any) => (
+    <Card key={hearing.id}>
+      <CardContent className="pt-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                {new Date(hearing.date).toLocaleDateString("es-MX", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </div>
+              {hearing.time && (
+                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  {hearing.time}
+                </div>
+              )}
+              <Badge className={STATUS_STYLES[hearing.status] || ""}>
+                {STATUS_LABELS[hearing.status] || hearing.status}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-sm">
+              <Gavel className="h-4 w-4 text-muted-foreground" />
+              <span className="font-medium">{hearing.type}</span>
+              {hearing.courtName && (
+                <span className="text-muted-foreground">
+                  &middot; {hearing.courtName}
+                </span>
+              )}
+            </div>
+
+            {hearing.result && (
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium">Resultado:</span>{" "}
+                {hearing.result}
+              </p>
+            )}
+            {hearing.notes && (
+              <p className="text-sm text-muted-foreground italic">
+                {hearing.notes}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-1 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => startEdit(hearing)}
+              title="Editar"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(hearing.id, hearing.type)}
+              disabled={deleting === hearing.id}
+              className="text-red-600 hover:text-red-700"
+              title="Eliminar"
+            >
+              {deleting === hearing.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 
   return (
@@ -147,12 +258,10 @@ export default function AudienciasTab({
       {showForm && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Nueva audiencia</CardTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowForm(false)}
-            >
+            <CardTitle className="text-base">
+              {editingId ? "Editar audiencia" : "Nueva audiencia"}
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={resetForm}>
               <X className="h-4 w-4" />
             </Button>
           </CardHeader>
@@ -200,20 +309,79 @@ export default function AudienciasTab({
               </div>
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Programar
-            </Button>
+            <div className="space-y-2">
+              <Label className="text-xs">Estado</Label>
+              <div className="flex flex-wrap gap-2">
+                {HEARING_STATUSES.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setForm((p) => ({ ...p, status: s }))}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                      form.status === s
+                        ? STATUS_STYLES[s]
+                        : "hover:border-primary/40"
+                    }`}
+                  >
+                    {STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(form.status === "REALIZADA" ||
+              form.status === "SUSPENDIDA" ||
+              form.status === "CANCELADA") && (
+              <div className="space-y-1">
+                <Label className="text-xs">Resultado</Label>
+                <Input
+                  value={form.result}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, result: e.target.value }))
+                  }
+                  placeholder="Resultado de la audiencia"
+                />
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label className="text-xs">Notas</Label>
+              <textarea
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary min-h-[60px]"
+                value={form.notes}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, notes: e.target.value }))
+                }
+                placeholder="Observaciones, recordatorios, comparecientes..."
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : editingId ? (
+                  <Save className="mr-2 h-4 w-4" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                {editingId ? "Guardar cambios" : "Programar"}
+              </Button>
+              <Button variant="ghost" onClick={resetForm}>
+                Cancelar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Lista de audiencias */}
-      {sortedHearings.length === 0 && !showForm && (
+      {error && !showForm && (
+        <p className="text-sm text-red-600">{error}</p>
+      )}
+
+      {/* Sin audiencias */}
+      {hearings.length === 0 && !showForm && (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             No se han programado audiencias.
@@ -221,140 +389,25 @@ export default function AudienciasTab({
         </Card>
       )}
 
-      <div className="space-y-3">
-        {sortedHearings.map((hearing: any) => (
-          <Card key={hearing.id}>
-            <CardContent className="pt-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 text-sm font-medium">
-                      <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                      {new Date(hearing.date).toLocaleDateString("es-MX", {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </div>
-                    {hearing.time && (
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5" />
-                        {hearing.time}
-                      </div>
-                    )}
-                    <Badge className={STATUS_STYLES[hearing.status] || ""}>
-                      {STATUS_LABELS[hearing.status] || hearing.status}
-                    </Badge>
-                  </div>
+      {/* Próximas */}
+      {upcoming.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Próximas ({upcoming.length})
+          </h3>
+          {upcoming.map(renderHearing)}
+        </div>
+      )}
 
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Gavel className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{hearing.type}</span>
-                    {hearing.courtName && (
-                      <span className="text-muted-foreground">
-                        &middot; {hearing.courtName}
-                      </span>
-                    )}
-                  </div>
-
-                  {hearing.result && editingId !== hearing.id && (
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium">Resultado:</span>{" "}
-                      {hearing.result}
-                    </p>
-                  )}
-
-                  {/* Edición inline de status y resultado */}
-                  {editingId === hearing.id && (
-                    <div className="mt-3 space-y-3 rounded-lg border bg-muted/30 p-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">Estado</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {HEARING_STATUSES.map((s) => (
-                            <button
-                              key={s}
-                              onClick={() =>
-                                setEditForm((p) => ({ ...p, status: s }))
-                              }
-                              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                                editForm.status === s
-                                  ? STATUS_STYLES[s]
-                                  : "hover:border-primary/40"
-                              }`}
-                            >
-                              {STATUS_LABELS[s]}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Resultado</Label>
-                        <Input
-                          value={editForm.result}
-                          onChange={(e) =>
-                            setEditForm((p) => ({
-                              ...p,
-                              result: e.target.value,
-                            }))
-                          }
-                          placeholder="Resultado de la audiencia"
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => handleUpdate(hearing.id)}
-                          disabled={updatingId === hearing.id}
-                        >
-                          {updatingId === hearing.id ? (
-                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Save className="mr-1 h-3.5 w-3.5" />
-                          )}
-                          Guardar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingId(null)}
-                        >
-                          Cancelar
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-1">
-                  {editingId !== hearing.id && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => startEdit(hearing)}
-                    >
-                      Editar
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(hearing.id)}
-                    disabled={deleting === hearing.id}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    {deleting === hearing.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Pasadas */}
+      {past.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+            Históricas ({past.length})
+          </h3>
+          {past.map(renderHearing)}
+        </div>
+      )}
     </div>
   );
 }

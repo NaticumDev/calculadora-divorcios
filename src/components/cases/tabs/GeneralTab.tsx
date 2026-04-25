@@ -57,6 +57,8 @@ function PartyCard({
 }) {
   const [editing, setEditing] = useState(!party);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string>("");
   const [form, setForm] = useState({
     fullName: party?.fullName || "",
     curp: party?.curp || "",
@@ -76,10 +78,14 @@ function PartyCard({
   };
 
   const handleSave = async () => {
-    if (!form.fullName.trim()) return;
+    if (!form.fullName.trim()) {
+      setError("El nombre completo es obligatorio");
+      return;
+    }
     setSaving(true);
+    setError("");
     try {
-      await fetch(`/api/cases/${caseId}/parties`, {
+      const res = await fetch(`/api/cases/${caseId}/parties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,12 +103,44 @@ function PartyCard({
           birthDate: form.birthDate || null,
         }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
       setEditing(false);
       onRefresh();
-    } catch {
-      // error silenciado
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!party?.id) return;
+    const label = role === "client" ? "cliente" : "contraparte";
+    if (
+      !confirm(
+        `¿Eliminar al ${label} "${party.fullName}"? Esto desvinculará sus datos del caso.`
+      )
+    )
+      return;
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/cases/${caseId}/parties/${party.id}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || data.error || `Error ${res.status}`);
+      }
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al eliminar");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -136,24 +174,47 @@ function PartyCard({
           <Icon className="h-5 w-5" />
           {title}
         </CardTitle>
-        {party && !editing && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditing(true)}
-          >
-            <Edit2 className="h-4 w-4" />
-          </Button>
-        )}
-        {editing && party && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setEditing(false)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
+        <div className="flex gap-1">
+          {party && !editing && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditing(true)}
+                title="Editar"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleting}
+                title="Eliminar"
+                className="text-red-600 hover:text-red-700"
+              >
+                {deleting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            </>
+          )}
+          {editing && party && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setEditing(false);
+                setError("");
+              }}
+              title="Cancelar"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {editing ? (
@@ -236,6 +297,9 @@ function PartyCard({
                 placeholder="Dirección completa"
               />
             </div>
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
             <Button onClick={handleSave} disabled={saving} className="w-full">
               {saving ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
