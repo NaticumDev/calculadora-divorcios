@@ -5,6 +5,40 @@ export type ProfessionalOpps = "none" | "some" | "significant";
 export type HouseholdContribution = "partial" | "primary" | "exclusive";
 export type EstimateLevel = "conservative" | "moderate" | "aggressive";
 
+/**
+ * Modo de cálculo de pensión compensatoria:
+ * - QUICK: Estimación rápida con factores ponderados (Art. 200, basado en diferencial de ingresos y factores ajustados).
+ * - LIFE_STANDARD: Cálculo detallado por rubros para mantener el mismo nivel de vida que la beneficiaria tenía durante el matrimonio.
+ */
+export type CompensatoryMode = "QUICK" | "LIFE_STANDARD";
+
+/**
+ * Un rubro del cálculo detallado por nivel de vida.
+ * Si paidByObligor=true, el rubro NO se incluye en la pensión líquida
+ * (lo paga directamente el obligado).
+ */
+export interface LifeStandardItem {
+  monthlyAmount: number;
+  paidByObligor: boolean;
+}
+
+/**
+ * Conjunto de rubros del cálculo "por nivel de vida"
+ * (basado en metodología del despacho).
+ */
+export interface LifeStandardItems {
+  housing: LifeStandardItem;             // Techo (renta)
+  householdServices: LifeStandardItem;   // Servicios del hogar (luz, agua, gas, internet, etc.)
+  domesticServices: LifeStandardItem;    // Servicios domésticos (personal, jardinería, piscina)
+  food: LifeStandardItem;                // Alimentación (víveres semanales/quincenales)
+  hygieneSupplies: LifeStandardItem;     // Limpieza e higiene personal
+  clothing: LifeStandardItem;            // Ropa y calzado (promedio anual / 12)
+  personalCare: LifeStandardItem;        // Cuidado personal (corte de pelo, manos, pies)
+  transport: LifeStandardItem;           // Transporte (gasolina, seguro, mantenimiento)
+  medical: LifeStandardItem;             // Gastos médicos (póliza GMM, medicamentos)
+  recreation: LifeStandardItem;          // Esparcimiento (mensual + vacaciones anuales prorrateadas)
+}
+
 export interface ChildExpenseBreakdown {
   childAge: number;
   food: number;
@@ -42,12 +76,22 @@ export interface CompensatoryFactors {
 }
 
 export interface CompensatoryResult {
+  // Modo QUICK: tres niveles ponderados
   conservative: number;
   moderate: number;
   aggressive: number;
   selectedMonthly: number;
   durationYears: number;
   totalEstimate: number;
+
+  // Modo LIFE_STANDARD: desglose adicional (opcional)
+  mode?: CompensatoryMode;
+  /** Suma total de todos los rubros del nivel de vida (incluye los que paga el obligado directo) */
+  lifeStandardTotal?: number;
+  /** Monto a pagar como pensión líquida (solo rubros NO pagados directamente por el obligado) */
+  liquidPension?: number;
+  /** Indica si el monto excede los ingresos del obligado */
+  exceedsObligorIncome?: boolean;
 }
 
 export interface HousingCostsInput {
@@ -112,6 +156,9 @@ export interface CalculationInput {
     enabled: boolean;
     customMonthly?: number;
     estimateLevel: EstimateLevel;
+    mode: CompensatoryMode;
+    lifeStandardItems: LifeStandardItems;
+    lifeStandardNotes?: string;
   };
   housing: HousingCostsInput;
   legalFees: LegalFeesInput;

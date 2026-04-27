@@ -1,6 +1,9 @@
 import { CalculationInput, CalculationResult } from "@/types/calculation";
 import { calculateChildSupport } from "./pension-alimenticia";
-import { calculateCompensatory } from "./pension-compensatoria";
+import {
+  calculateCompensatory,
+  calculateLifeStandard,
+} from "./pension-compensatoria";
 import { calculateHousingCosts } from "./housing-costs";
 import { calculateLegalFees } from "./legal-fees";
 import { generateProjections } from "./projections";
@@ -18,29 +21,40 @@ export function calculateDivorceCosts(
   // 2. Pension compensatoria
   let compensatory = null;
   if (input.compensatory.enabled) {
-    const result = calculateCompensatory(
-      {
-        marriageDurationYears: input.compensatory.marriageDurationYears,
-        obligorMonthlyIncome: input.compensatory.obligorMonthlyIncome,
-        beneficiaryMonthlyIncome: input.compensatory.beneficiaryMonthlyIncome,
-        beneficiaryAge: input.compensatory.beneficiaryAge,
-        healthStatus: input.compensatory.healthStatus,
-        professionalOppsLost: input.compensatory.professionalOppsLost,
-        householdContribution: input.compensatory.householdContribution,
-      },
-      input.compensatory.customMonthly
-    );
+    if (input.compensatory.mode === "LIFE_STANDARD") {
+      // Modo nivel de vida: suma rubros, separa los que paga el obligado directo
+      compensatory = calculateLifeStandard(
+        input.compensatory.lifeStandardItems,
+        input.compensatory.marriageDurationYears,
+        input.compensatory.obligorMonthlyIncome
+      );
+    } else {
+      // Modo rápido (factores ponderados, comportamiento original)
+      const result = calculateCompensatory(
+        {
+          marriageDurationYears: input.compensatory.marriageDurationYears,
+          obligorMonthlyIncome: input.compensatory.obligorMonthlyIncome,
+          beneficiaryMonthlyIncome:
+            input.compensatory.beneficiaryMonthlyIncome,
+          beneficiaryAge: input.compensatory.beneficiaryAge,
+          healthStatus: input.compensatory.healthStatus,
+          professionalOppsLost: input.compensatory.professionalOppsLost,
+          householdContribution: input.compensatory.householdContribution,
+        },
+        input.compensatory.customMonthly
+      );
 
-    // Aplicar nivel de estimacion seleccionado
-    const selectedMonthly =
-      input.compensatory.customMonthly ??
-      result[input.compensatory.estimateLevel];
+      // Aplicar nivel de estimacion seleccionado
+      const selectedMonthly =
+        input.compensatory.customMonthly ??
+        result[input.compensatory.estimateLevel];
 
-    compensatory = {
-      ...result,
-      selectedMonthly,
-      totalEstimate: selectedMonthly * 12 * result.durationYears,
-    };
+      compensatory = {
+        ...result,
+        selectedMonthly,
+        totalEstimate: selectedMonthly * 12 * result.durationYears,
+      };
+    }
   }
 
   // 3. Costos de vivienda

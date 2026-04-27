@@ -4,8 +4,54 @@ import {
   HealthStatus,
   ProfessionalOpps,
   HouseholdContribution,
+  LifeStandardItems,
 } from "@/types/calculation";
 import { YUCATAN_DEFAULTS } from "./constants";
+
+/**
+ * Calcula la pensión compensatoria por NIVEL DE VIDA.
+ *
+ * Metodología del despacho: la pensión debe cubrir el mismo nivel
+ * de vida que la beneficiaria tenía hasta el momento del divorcio.
+ * Se suma el gasto mensual de cada rubro. Los rubros marcados como
+ * "lo paga directamente el obligado" se incluyen en el nivel de vida
+ * total pero NO en la pensión líquida.
+ */
+export function calculateLifeStandard(
+  items: LifeStandardItems,
+  marriageDurationYears: number,
+  obligorMonthlyIncome: number
+): CompensatoryResult {
+  const allItems = Object.values(items);
+
+  const lifeStandardTotal = allItems.reduce(
+    (sum, it) => sum + (Number(it.monthlyAmount) || 0),
+    0
+  );
+
+  // Monto a pagar como pensión líquida = rubros NO pagados directo por el obligado
+  const liquidPension = allItems
+    .filter((it) => !it.paidByObligor)
+    .reduce((sum, it) => sum + (Number(it.monthlyAmount) || 0), 0);
+
+  const exceedsObligorIncome =
+    obligorMonthlyIncome > 0 && liquidPension > obligorMonthlyIncome;
+
+  return {
+    // Para mantener compatibilidad con el resto del flujo, los tres niveles
+    // del modo "rápido" se unifican al monto líquido en modo nivel de vida.
+    conservative: liquidPension,
+    moderate: liquidPension,
+    aggressive: liquidPension,
+    selectedMonthly: liquidPension,
+    durationYears: marriageDurationYears,
+    totalEstimate: liquidPension * 12 * marriageDurationYears,
+    mode: "LIFE_STANDARD",
+    lifeStandardTotal,
+    liquidPension,
+    exceedsObligorIncome,
+  };
+}
 
 /**
  * Calcula la pension compensatoria basada en el Art. 200 del
@@ -37,6 +83,7 @@ export function calculateCompensatory(
       selectedMonthly: customMonthly,
       durationYears: marriageDurationYears,
       totalEstimate: customMonthly * 12 * marriageDurationYears,
+      mode: "QUICK",
     };
   }
 
@@ -56,6 +103,7 @@ export function calculateCompensatory(
       selectedMonthly: 0,
       durationYears: marriageDurationYears,
       totalEstimate: 0,
+      mode: "QUICK",
     };
   }
 
@@ -78,6 +126,7 @@ export function calculateCompensatory(
     selectedMonthly: moderate,
     durationYears: marriageDurationYears,
     totalEstimate: moderate * 12 * marriageDurationYears,
+    mode: "QUICK",
   };
 }
 

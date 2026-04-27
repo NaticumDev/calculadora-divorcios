@@ -11,9 +11,30 @@ import {
   ProfessionalOpps,
   HouseholdContribution,
   HousingCostsInput,
+  CompensatoryMode,
+  LifeStandardItems,
+  LifeStandardItem,
 } from "@/types/calculation";
 import { calculateDivorceCosts } from "@/lib/calculations/engine";
 import { YUCATAN_DEFAULTS } from "@/lib/calculations/constants";
+
+const emptyLifeStandardItem = (): LifeStandardItem => ({
+  monthlyAmount: 0,
+  paidByObligor: false,
+});
+
+const emptyLifeStandardItems = (): LifeStandardItems => ({
+  housing: emptyLifeStandardItem(),
+  householdServices: emptyLifeStandardItem(),
+  domesticServices: emptyLifeStandardItem(),
+  food: emptyLifeStandardItem(),
+  hygieneSupplies: emptyLifeStandardItem(),
+  clothing: emptyLifeStandardItem(),
+  personalCare: emptyLifeStandardItem(),
+  transport: emptyLifeStandardItem(),
+  medical: emptyLifeStandardItem(),
+  recreation: emptyLifeStandardItem(),
+});
 
 const defaults = YUCATAN_DEFAULTS;
 const housing = defaults.MERIDA_HOUSING;
@@ -46,6 +67,9 @@ const initialState: WizardState = {
     professionalOppsLost: "none",
     householdContribution: "partial",
     estimateLevel: "moderate",
+    mode: "QUICK",
+    lifeStandardItems: emptyLifeStandardItems(),
+    lifeStandardNotes: "",
   },
 
   housing: {
@@ -84,6 +108,12 @@ interface CalculationActions {
   setCompensatoryEnabled: (enabled: boolean) => void;
   setCompensatoryFactors: (factors: Partial<WizardState["compensatory"]>) => void;
   setEstimateLevel: (level: EstimateLevel) => void;
+  setCompensatoryMode: (mode: CompensatoryMode) => void;
+  setLifeStandardItem: (
+    key: keyof LifeStandardItems,
+    item: Partial<LifeStandardItem>
+  ) => void;
+  setLifeStandardNotes: (notes: string) => void;
   setHousing: (data: Partial<HousingCostsInput>) => void;
   setLegalFees: (baseFee: number, additional: { name: string; amount: number }[]) => void;
   calculate: () => CalculationResult;
@@ -173,6 +203,27 @@ export const useCalculation = create<WizardState & CalculationActions>(
     setEstimateLevel: (level) =>
       set((s) => ({
         compensatory: { ...s.compensatory, estimateLevel: level },
+      })),
+
+    setCompensatoryMode: (mode) =>
+      set((s) => ({
+        compensatory: { ...s.compensatory, mode },
+      })),
+
+    setLifeStandardItem: (key, item) =>
+      set((s) => ({
+        compensatory: {
+          ...s.compensatory,
+          lifeStandardItems: {
+            ...s.compensatory.lifeStandardItems,
+            [key]: { ...s.compensatory.lifeStandardItems[key], ...item },
+          },
+        },
+      })),
+
+    setLifeStandardNotes: (notes) =>
+      set((s) => ({
+        compensatory: { ...s.compensatory, lifeStandardNotes: notes },
       })),
 
     setHousing: (data) =>
